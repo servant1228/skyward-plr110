@@ -207,7 +207,11 @@ impl App {
                     if let Some(p) = &mut self.row_press {
                         p.lift(now);
                     }
-                    fx.extend(self.act(a, now));
+                    let action = self.act(a, now);
+                    if self.tap_feedback && self.state.vibrate && !action.iter().any(|e| matches!(e, Effect::Haptic | Effect::Ticks)) {
+                        fx.push(Effect::Haptic);
+                    }
+                    fx.extend(action);
                 }
                 Drag::Press { x, y, action: None, .. } if self.screen() == Screen::Editor => self.place_caret(f, x, y + scroll),
                 Drag::History { pitch, .. } => {
@@ -510,6 +514,15 @@ mod tests {
     use super::*;
     use crate::app::testing::*;
     use crate::color::over;
+
+    #[test]
+    fn timed_motor_taps_only_when_enabled_after_activation() {
+        let (f, i) = (fonts(), info());
+        let mut app = App::new(Screen::Settings, W, H, PPD);
+        app.tap_feedback = true;
+        assert!(tap(&mut app, &f, &i, Action::Toggle(Switch::Vibrate)).is_empty());
+        assert_eq!(tap(&mut app, &f, &i, Action::Toggle(Switch::Vibrate)), vec![Effect::Haptic]);
+    }
 
     #[test]
     fn a_row_held_darkens_behind_its_words_a_moment_after_the_finger_lands() {

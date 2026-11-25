@@ -44,6 +44,9 @@ pub mod ramdisk {
 #[derive(Debug, Clone, Deserialize)]
 pub struct DeviceConfig {
     pub device: Device,
+    /// Require an explicit MTP switch press each time recovery starts.
+    #[serde(default)]
+    pub manual_file_transfer: bool,
     #[serde(default)]
     pub display: Display,
     #[serde(default)]
@@ -116,6 +119,10 @@ pub struct Wlan {
     pub firmware: Vec<Firmware>,
     /// The network interface the driver makes.
     pub interface: String,
+    /// Cold-start interface discovery budget. Opts into at most five seconds
+    /// of link-up retries if a newly registered driver still reports EBUSY.
+    #[serde(default)]
+    pub interface_wait_seconds: Option<u16>,
     /// The phone's own wpa_supplicant.
     pub supplicant: String,
     /// Directories for its LD_LIBRARY_PATH, searched in order and before
@@ -971,10 +978,13 @@ mod tests {
     fn plr110_uses_timed_haptics_and_on_demand_wpss() {
         let cfg = DeviceConfig::parse(include_str!("../../../devices/OP6117L1.toml")).unwrap();
         assert!(matches!(cfg.haptics, Some(Haptics::Timed { timed_led }) if timed_led == "/sys/class/leds/vibrator"));
+        assert!(cfg.manual_file_transfer);
+        assert!(!DeviceConfig::parse("[device]\ncodename = 'other'").unwrap().manual_file_transfer);
         assert_eq!(cfg.modules.load, ["oplus_hbp_core"]);
         let wlan = cfg.wlan.unwrap();
         assert_eq!(wlan.modules, ["rfkill", "qca_cld3_wcn7750"]);
         assert_eq!(wlan.firmware_partition.as_deref(), Some("modem"));
+        assert_eq!(wlan.interface_wait_seconds, Some(45));
         assert_eq!(wlan.writes.last().unwrap().path, "/sys/kernel/icnss/wpss_boot");
         assert!(wlan.probe.is_none());
     }

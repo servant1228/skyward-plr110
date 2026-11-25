@@ -1,5 +1,8 @@
 # OnePlus Ace 6T PLR110, PLR110_17.0.0.101(CN01). Experimental.
 # Source: Android properties, wm size/density and SPI binding on this unit.
+# An MTP host is not authenticated. Leave transfer off on every recovery entry.
+manual_file_transfer = true
+
 [device]
 codename = "OP6117L1"
 brand = "OnePlus"
@@ -35,6 +38,7 @@ writes = [
     { path = "/sys/kernel/icnss/wpss_boot", value = "1" },
 ]
 interface = "wlan0"
+interface_wait_seconds = 45
 supplicant = "/vendor/bin/hw/wpa_supplicant"
 libraries = ["/system/lib64", "/vendor/lib64"]
 service = "android.hardware.wifi.supplicant.ISupplicant/default"

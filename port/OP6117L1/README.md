@@ -1,4 +1,11 @@
-# OnePlus ACE 6T · R7 预发行
+# OnePlus ACE 6T
+
+按 **ColorOS 完整固件版本**选包，不要跨行混刷：
+
+- `PLR110_17.0.1.200(CN01)`：见 [公开候选 RC1 · 验收、构建与回退](PUBLIC-200.md)。尚未标为正式版。
+- `PLR110_17.0.0.101(CN01)`：[R7 预发行](https://github.com/servant1228/skyward-plr110/releases/tag/ace6t-r7)，说明如下。
+
+## R7 预发行（仅 .101）
 
 适用机型：PLR110 / OP6117L1，固件基线：PLR110_17.0.0.101(CN01)。基于 [kirklin/skyward](https://github.com/kirklin/skyward) 0.5.1。
 

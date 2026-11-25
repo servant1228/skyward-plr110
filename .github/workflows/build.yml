@@ -6,7 +6,8 @@ name: Build
 # it can build for one device alone.
 on:
   push:
-    branches: ["**"]
+    # The PLR110 branch runs source-only CI, never the all-device stock/image matrix.
+    branches-ignore: ["port/oneplus-ace-6t"]
     tags: ["v*"]
   workflow_dispatch:
     inputs:

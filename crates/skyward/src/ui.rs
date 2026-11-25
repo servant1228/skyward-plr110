@@ -1320,6 +1320,7 @@ impl<'a> Pages<'a> {
             | Work::SystemStopped => start,
         };
         let mut app = App::new(first, w, h, cfg.display.density as f32 / 160.0);
+        app.tap_feedback = matches!(&cfg.haptics, Some(skyward_config::Haptics::Timed { .. }));
         app.set_screen_corners(cfg.display.corner_radius as f32);
         // The settings kept from the starts before are back before the first
         // frame, and before file transfer starts with its switch and the time
@@ -1330,6 +1331,11 @@ impl<'a> Pages<'a> {
         let locale = request.locale.as_deref().or(info.locale.as_deref());
         let named = locale.map(Lang::for_locale).transpose()?;
         app.take_settings(kept.settings(), named);
+        // MTP does not authenticate the USB host. On opt-in ports never
+        // expose storage just because a previous session enabled transfer.
+        if cfg.manual_file_transfer {
+            app.state.file_transfer = false;
+        }
         let keeper = Keeper::new(&kept);
         skyward_sys::kmsg(&format!(
             "the pages speak {:?}, {}, and the locale named is {}",
@@ -3068,12 +3074,15 @@ impl Pages<'_> {
         match (on, self.transfer.take()) {
             (true, None) => match Transfer::start(self.cfg, &self.info, self.app.state.zone()) {
                 Ok(t) => {
-                    self.transfer = Some(t);
-                    if rests
-                        && let Err(e) = skyward_sys::usb::switch(skyward_sys::usb::resting(), USB_TIMEOUT)
-                    {
-                        skyward_sys::kmsg(&format!("the port did not take file transfer: {e:#}"))?;
-                        self.app.report(&format!("{e:#}"), now);
+                    if rests && let Err(e) = skyward_sys::usb::switch(skyward_sys::usb::resting(), USB_TIMEOUT) {
+                        let why = match t.stop(true) {
+                            Ok(()) => format!("{e:#}"),
+                            Err(back) => format!("{e:#}; return to adb: {back:#}"),
+                        };
+                        skyward_sys::kmsg(&format!("the port did not take file transfer: {why}"))?;
+                        self.app.file_transfer_failed(false, &skyward_ui::fmt::transfer_failed(self.app.state.lang, &why), now);
+                    } else {
+                        self.transfer = Some(t);
                     }
                 }
                 Err(e) => {

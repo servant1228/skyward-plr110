@@ -1060,6 +1060,7 @@ fn keyboard_strip(t: &Theme, frame: &Frame) -> (Canvas, i32) {
 
 pub struct App {
     pub state: State,
+    pub tap_feedback: bool,
     /// The pages open, the one shown last: each with how far it is
     /// scrolled and where the keys are on it.
     stack: Vec<(Screen, f32, Focus)>,
@@ -1205,6 +1206,7 @@ impl App {
     pub fn new(start: Screen, w: u32, h: u32, px_per_dp: f32) -> Self {
         App {
             state: State::default(),
+            tap_feedback: false,
             stack: vec![(start, 0.0, Focus::Unset)],
             frame: None,
             spots: None,

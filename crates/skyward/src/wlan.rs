@@ -3,6 +3,8 @@
 //! address asked for over DHCP and kept. The screen is told how things
 //! stand each time that changes.
 
+mod readiness;
+
 use anyhow::{bail, ensure, Context, Result};
 use skyward_config::{Firmware, Wlan as Config};
 use skyward_net::dhcp::{self, Kept, Lease};
@@ -640,13 +642,30 @@ fn bring_up(cfg: &Config, modules: &[PathBuf]) -> Result<()> {
         for w in &cfg.writes {
             fs::write(&w.path, &w.value).with_context(|| format!("write {} to {}", w.value, w.path))?;
         }
-        let until = Instant::now() + INTERFACE_WAIT;
+        let wait = cfg.interface_wait_seconds.map_or(INTERFACE_WAIT, |s| Duration::from_secs(s.into()));
+        let start = Instant::now();
         while !net.exists() {
-            ensure!(Instant::now() < until, "the driver made no {} in {} seconds", cfg.interface, INTERFACE_WAIT.as_secs());
+            ensure!(start.elapsed() < wait, "the driver made no {} in {} seconds", cfg.interface, wait.as_secs());
             thread::sleep(Duration::from_millis(100));
         }
+        let _ = skyward_sys::kmsg(&format!("WLAN: {} appeared after {} ms waiting for the driver", cfg.interface, start.elapsed().as_millis()));
     }
-    iface::set_up(&cfg.interface, true)
+    // Only phones with an explicit driver wait opt in. Some WCN7750 builds
+    // publish wlan0 before the driver accepts IFF_UP. Do not repeat bring_up:
+    // it also loads modules and writes the WPSS power request.
+    let budget = Duration::from_secs(u64::from(cfg.interface_wait_seconds.unwrap_or(0)).min(5));
+    let start = Instant::now();
+    let mut retries = 0;
+    let result = readiness::while_busy(
+        || iface::set_up(&cfg.interface, true),
+        |e| e.downcast_ref::<std::io::Error>().is_some_and(|io| io.raw_os_error() == Some(libc::EBUSY)),
+        || budget.saturating_sub(start.elapsed()),
+        |delay| { retries += 1; thread::sleep(delay); },
+    );
+    if retries != 0 {
+        let _ = skyward_sys::kmsg(&format!("WLAN: {} up after EBUSY: retries={retries} elapsed_ms={} ok={}", cfg.interface, start.elapsed().as_millis(), result.is_ok()));
+    }
+    result
 }
 
 /// Put a file the driver asks for where the firmware loader looks. One the

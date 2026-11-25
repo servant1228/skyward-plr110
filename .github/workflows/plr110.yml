@@ -1,0 +1,24 @@
+name: PLR110 Linux checks
+on:
+  push:
+    branches: ["port/oneplus-ace-6t"]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  port-tests:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Install the pinned host toolchain
+        run: rustup toolchain install 1.100.0 --profile minimal
+      - name: Test all device configuration rules on Linux
+        run: cargo +1.100.0 test --locked -p skyward-config --lib
+      - name: Test the driver's bounded link-up retries
+        run: |
+          printf '#[path="%s/crates/skyward/src/wlan/readiness.rs"]\nmod readiness;\n' "$GITHUB_WORKSPACE" > "$RUNNER_TEMP/wlan-tests.rs"
+          rustc +1.100.0 --edition=2024 --test "$RUNNER_TEMP/wlan-tests.rs" -o "$RUNNER_TEMP/wlan-tests"
+          "$RUNNER_TEMP/wlan-tests"
