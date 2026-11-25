@@ -2,7 +2,7 @@
 
 按 **ColorOS 完整固件版本**选包，不要跨行混刷：
 
-- `PLR110_17.0.1.200(CN01)`：见 [公开候选 RC1 · 验收、构建与回退](PUBLIC-200.md)。尚未标为正式版。
+- `PLR110_17.0.1.200(CN01)`：[下载基础日用正式版](https://github.com/servant1228/skyward-plr110/releases/tag/ace6t-17.0.1.200) · [支持范围、校验、构建与回退](PUBLIC-200.md)。发布附件就是已验收的原版 RC1。
 - `PLR110_17.0.0.101(CN01)`：[R7 预发行](https://github.com/servant1228/skyward-plr110/releases/tag/ace6t-r7)，说明如下。
 
 ## R7 预发行（仅 .101）
