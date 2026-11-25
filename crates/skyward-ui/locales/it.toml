@@ -175,6 +175,8 @@ failed = "Unione non riuscita"
 merged = "Unito"
 
 [data]
+mounted_owner = "/data montata · Memoria del proprietario disponibile"
+mounted_unconfirmed = "/data montata · Accesso alla memoria del proprietario non confermato"
 not_mounted = "Non montata"
 locked = "Bloccata"
 decrypted = "Decriptata"

@@ -34,14 +34,14 @@ pub enum Task {
     /// Ask `server` for the newest system for `installed`. Where that
     /// fails, `probe`, the page that tells whether the network joined
     /// reaches the internet, says whether the network is why.
-    Check { server: String, probe: String, installed: Installed },
+    Check { server: String, probe: Option<String>, installed: Installed },
     /// Download `release`'s full package to `path`; `server` is asked again
     /// for where it is when the addresses it gave have run out.
     Download { server: String, installed: Installed, release: Release, path: PathBuf },
     /// Ask GitHub for Skyward's newest release and its zip for the phone
     /// `codename` names; where that fails, `probe` says whether the network
     /// is why.
-    CheckSkyward { probe: String, codename: String },
+    CheckSkyward { probe: Option<String>, codename: String },
     /// Download `build` to `path`, check that its image is Skyward for the
     /// phone `codename` names, and write the image into the recovery
     /// partitions of the slot that starts next and of any other slot that
@@ -101,7 +101,7 @@ impl Worker {
                 Task::Check { server, probe, installed } => {
                     let a = http::agent(servers.clone());
                     *using.lock().expect("the agent is not held by a thread that panicked") = Some(a.clone());
-                    let mut answer = release::ask(&a, &server, &installed).map_err(|e| unanswered(&e, &server, &probe, &servers));
+                    let mut answer = release::ask(&a, &server, &installed).map_err(|e| unanswered(&e, &server, probe.as_deref(), &servers));
                     if let Ok(Some(r)) = &mut answer {
                         match release::length(&a, &r.urls[0]) {
                             Ok(length) => r.length = Some(length),
@@ -138,7 +138,7 @@ impl Worker {
                 Task::CheckSkyward { probe, codename } => {
                     let a = http::agent(servers.clone());
                     *using.lock().expect("the agent is not held by a thread that panicked") = Some(a.clone());
-                    let answer = github::ask(&a, &codename, skyward_info::VERSION).map_err(|e| unanswered(&e, github::LATEST, &probe, &servers));
+                    let answer = github::ask(&a, &codename, skyward_info::VERSION).map_err(|e| unanswered(&e, github::LATEST, probe.as_deref(), &servers));
                     tell(Event::SkywardChecked(answer));
                 }
                 // GitHub's API hands the zip out at a short-lived address
@@ -212,7 +212,8 @@ impl Worker {
 /// Why `server` gave no answer: that the network joined wants a login
 /// first, or reaches nothing, where `probe` shows it, rather than how
 /// asking failed through such a network.
-fn unanswered(e: &anyhow::Error, server: &str, probe: &str, servers: &Servers) -> Unanswered {
+fn unanswered(e: &anyhow::Error, server: &str, probe: Option<&str>, servers: &Servers) -> Unanswered {
+    let Some(probe) = probe else { return Unanswered::Failed(format!("{e:#}")) };
     let dns = servers.lock().expect("the DNS servers are not held by a thread that panicked").clone();
     let reach = reach::probe(probe, &dns);
     let _ = skyward_sys::kmsg(&format!("asking {server}: {e:#}; the network joined {reach}"));

@@ -169,6 +169,23 @@ fn show_owner_storage() -> Result<()> {
     mount::bind(&Path::new(SHARED_STORAGE).join(OWNER.to_string()), at)
 }
 
+/// Positive evidence of access to the owner's shared storage after an
+/// incomplete opening. A bind alone also exists when names are encrypted.
+/// Do not open or enumerate any of the owner's files to find out.
+pub fn owner_storage_confirmed() -> Result<bool> {
+    use std::os::unix::fs::MetadataExt;
+    let at = Path::new(SDCARD);
+    if !mount::is_mount_point(at)? {
+        return Ok(false);
+    }
+    let owner = std::fs::metadata(Path::new(SHARED_STORAGE).join(OWNER.to_string()))?;
+    let shown = std::fs::metadata(at)?;
+    if !shown.is_dir() || (shown.dev(), shown.ino()) != (owner.dev(), owner.ino()) || shown.dev() != std::fs::metadata(MOUNT)?.dev() {
+        return Ok(false);
+    }
+    Ok(crate::fscrypt::directory_key_present(at)? == Some(true))
+}
+
 /// Close what opening the partition opened, where the recovery opened it:
 /// /sdcard, the partition's mount, and the device it is read through.
 pub fn close() -> Result<()> {
@@ -233,10 +250,10 @@ pub fn open_without_credential(keys: Option<&KeyMint>) -> Result<Opening> {
     let mut closed = Vec::new();
     let mut owner = Note::default();
     for user in open_users(service)? {
-        let protector = protector(user)?;
+        let protector = protector(user).with_context(|| format!("read the protector for user {user}"))?;
         match protector.lock {
             None => {
-                let note = open_user_files(service, user, None, None)?;
+                let note = open_user_files(service, user, None, None).with_context(|| format!("open the files of user {user} without a screen lock"))?;
                 if user == OWNER {
                     owner = note;
                 }

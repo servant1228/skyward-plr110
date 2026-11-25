@@ -305,7 +305,7 @@ impl App {
                     Vec::new()
                 }
             }
-            Screen::Decrypt if matches!(self.state.data, Data::Closed | Data::Failed(_)) => self.open_data(),
+            Screen::Decrypt if self.state.data.open_on_entry() => self.open_data(),
             // As the stock updater does, the page asks the update server as
             // it opens, once a network is joined and nothing has been heard.
             Screen::Update => {

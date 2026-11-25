@@ -175,6 +175,8 @@ failed = "Scalanie nieudane"
 merged = "Scalona"
 
 [data]
+mounted_owner = "/data zamontowana · Pamięć właściciela dostępna"
+mounted_unconfirmed = "/data zamontowana · Dostęp do pamięci właściciela niepotwierdzony"
 not_mounted = "Niezamontowana"
 locked = "Zaszyfrowana"
 decrypted = "Odszyfrowana"

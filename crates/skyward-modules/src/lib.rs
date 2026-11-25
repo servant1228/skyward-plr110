@@ -14,6 +14,7 @@ pub fn source_dir(source: &str) -> Result<PathBuf> {
         "vendor_boot" => "/lib/modules",
         "vendor_dlkm" => "/vendor_dlkm/lib/modules",
         "vendor" => "/vendor/lib/modules",
+        "system_dlkm" if !Path::new("/system_dlkm/flatten/lib/modules/modules.dep").is_file() && Path::new("/system_dlkm/lib/modules/modules.dep").is_file() => "/system_dlkm/lib/modules",
         "system_dlkm" => "/system_dlkm/flatten/lib/modules",
         _ => bail!("unknown module source {source:?}"),
     }))
@@ -35,6 +36,8 @@ pub fn load(dirs: &[PathBuf], names: &[String]) -> Result<Vec<PathBuf>> {
         for m in graph.load_order(std::slice::from_ref(&file)) {
             let path = graph
                 .resolve_path(&m)
+                // Vendor modules.dep can name a dependency from system_dlkm.
+                .or_else(|| dirs.iter().map(|d| d.join(&m)).find(|p| p.is_file()))
                 .ok_or_else(|| anyhow!("{m} is listed in {}/modules.dep but missing", dir.display()))?;
             insmod(&path, "")?;
             loaded.push(path);

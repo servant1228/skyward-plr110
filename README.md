@@ -4,6 +4,8 @@
 
 English | [简体中文](README.zh-CN.md)
 
+Device fork: [OnePlus ACE 6T release status and build notes](port/OP6117L1/README.md).
+
 Skyward is a recovery written in Rust, from scratch.
 
 <p align="center">

@@ -153,6 +153,12 @@ fn lines(text: &str) -> Result<Vec<(usize, Vec<String>)>> {
                 began = number;
             }
             ' ' | '\t' | '\r' => words.extend(word.take()),
+            // Some vendor scripts disable entire lines with //, including service
+            // headers. Accept this only before the first word of a logical line;
+            // paths, URLs, quoted values and command arguments keep their slashes.
+            '/' if words.is_empty() && word.is_none() && chars.peek() == Some(&'/') => {
+                while chars.next_if(|&c| c != '\n').is_some() {}
+            }
             '#' if word.is_none() => {
                 while chars.next_if(|&c| c != '\n').is_some() {}
             }
@@ -310,6 +316,18 @@ mod tests {
         assert_eq!(weaver.capabilities.as_deref(), Some(&strings(&["WAKE_ALARM"])[..]));
         assert_eq!(weaver.interfaces, ["android.hardware.weaver.IWeaver/default"]);
         assert!(weaver.disabled && weaver.oneshot);
+    }
+
+    #[test]
+    fn vendor_double_slash_disables_whole_lines_only() {
+        let disabled = "//move to odm to control project\n//service vendor.contexthub-default /vendor/bin/hw/android.hardware.contexthub-service.qmi\n  //    class hal\r\n\t//    user context_hub\n//    group context_hub";
+        assert_eq!(read(disabled).unwrap(), Script::default());
+        let s = read("service ok /vendor/bin/ok //arg https://host/a\n  // user wrong\n  user system\n  setenv P \"//quoted\"\n").unwrap();
+        assert_eq!(s.programs.len(), 1);
+        assert_eq!(s.programs[0].args, ["//arg", "https://host/a"]);
+        assert_eq!(s.programs[0].user.as_deref(), Some("system"));
+        assert_eq!(s.programs[0].environment[0].1, "//quoted");
+        assert!(read("// disabled\ninvalid_top_level_word\n").is_err());
     }
 
     #[test]

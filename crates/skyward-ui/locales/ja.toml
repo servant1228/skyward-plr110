@@ -175,6 +175,8 @@ failed = "マージ失敗"
 merged = "マージ済み"
 
 [data]
+mounted_owner = "/data マウント済み · 所有者のストレージは利用可能"
+mounted_unconfirmed = "/data マウント済み · 所有者のストレージへのアクセスは未確認"
 not_mounted = "未マウント"
 locked = "未復号"
 decrypted = "復号済み"

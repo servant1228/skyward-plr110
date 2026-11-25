@@ -138,7 +138,8 @@ impl Backlight {
 /// their factory tests drive the panel to, on the backlight's own scale:
 /// the 13 Ultra's panels give that level as well, and it comes to the same
 /// half of their range as the normal maximum they give.
-const NORMAL_MAX: [(&str, &str); 3] = [
+const NORMAL_MAX: [(&str, &str); 4] = [
+    ("oplus,dsi-bl-normal-max-level", "qcom,mdss-dsi-bl-max-level"),
     ("mi,normal-max-brightness-clone", "mi,max-brightness-clone"),
     ("mi,max-brightness-normal", "qcom,mdss-dsi-bl-max-level"),
     ("mi,mdss-dsi-fac-bl-max-level", "qcom,mdss-dsi-bl-max-level"),
@@ -882,6 +883,21 @@ fn log_mounted(mounted: &Opened) -> Result<()> {
     skyward_sys::kmsg(&format!("{} holds {} at {}", mounted.mapped.display(), mounted.filesystem, skyward_crypto::data::MOUNT))
 }
 
+/// After an incomplete opening, check the bound owner's directory policy,
+/// not its contents. An inconclusive probe must not enable storage actions.
+fn show_incomplete(app: &mut App, why: String) -> Result<()> {
+    let owner_storage = match skyward_crypto::data::owner_storage_confirmed() {
+        Ok(confirmed) => confirmed,
+        Err(e) => {
+            skyward_sys::kmsg(&format!("could not confirm owner storage: {e:#}"))?;
+            false
+        }
+    };
+    skyward_sys::kmsg(&format!("data is mounted; owner storage confirmed={owner_storage}; opening incomplete: {why}"))?;
+    app.data_incomplete(owner_storage, why);
+    Ok(())
+}
+
 /// Show what the data partition still keeps closed: the first user whose
 /// own files wait on a screen lock they set themselves, with the control
 /// that lock is answered with, or nothing. Users whose credential the phone
@@ -903,6 +919,11 @@ fn show_closed(app: &mut App, closed: &[Closed]) -> Result<()> {
         };
         (c.user, keys)
     });
+    // No credential to ask for does not mean all users were opened.
+    if waiting.is_none() && let Some(user) = closed.first() {
+        let why = user.why.as_deref().unwrap_or("profile still closed; no owner authorization available");
+        return show_incomplete(app, format!("user {}: {why}", user.user));
+    }
     app.data_waiting(waiting);
     Ok(())
 }
@@ -1258,7 +1279,9 @@ impl<'a> Pages<'a> {
         let battery = skyward_info::battery_now();
         untaken(&mut unread.battery, "the battery", battery.as_ref().err())?;
         let info = skyward_info::collect_with(cfg, battery.unwrap_or_default())?;
+        crate::port_diag::mark("load fonts");
         let fonts = Fonts::load(font, 0, mono)?;
+        crate::port_diag::mark("open DRM card0");
         let mut surface = KmsSurface::open("/dev/dri/card0")?;
         let (w, h) = surface.size();
         // A touch controller that follows the panel wakes as the panel goes
@@ -1273,10 +1296,12 @@ impl<'a> Pages<'a> {
             surface.settle()?;
         }
         eprintln!("display {}", surface.describe());
+        crate::port_diag::mark("DRM ready; open input");
         let inputs = Inputs::open(w, h, cfg.touch.writes.clone())?;
         let started = Instant::now();
         let control = Control::open()?;
         let haptics = cfg.haptics.as_ref().map(Haptics::open).transpose()?;
+        crate::port_diag::mark("open backlight");
         let backlight = Backlight::open()?;
         let first = match &request.work {
             Work::Fastboot => Screen::Fastboot,
@@ -1664,16 +1689,16 @@ impl<'a> Pages<'a> {
 
     /// One click of the motor, as strong as the settings say.
     fn click(&mut self) -> Result<()> {
-        if let Some(h) = &mut self.haptics {
-            h.click(self.app.state.vibration)?;
+        if let Some(h) = &mut self.haptics && let Err(e) = h.click(self.app.state.vibration) {
+            let _ = skyward_sys::kmsg(&format!("haptic click unavailable: {e:#}"));
         }
         Ok(())
     }
 
     /// The motor's ticks of the screen going off.
     fn ticks(&mut self) -> Result<()> {
-        if let Some(h) = &mut self.haptics {
-            h.ticks()?;
+        if let Some(h) = &mut self.haptics && let Err(e) = h.ticks() {
+            let _ = skyward_sys::kmsg(&format!("haptic ticks unavailable: {e:#}"));
         }
         Ok(())
     }
@@ -2369,15 +2394,23 @@ impl Pages<'_> {
                 follow_system_zone(&mut self.app, kept_time_zone()?.as_deref(), &self.info)?;
             }
             decrypt::Ended::Opened(Err(why)) => {
-                skyward_sys::kmsg(&format!("the data partition stays closed: {why}"))?;
-                // The update the system asked for cannot be read, and
-                // is done with.
+                // A failure from a user's protector does not undo the mount
+                // or remove keys already installed for other users.
+                self.closed.clear();
+                let mounted = mount::is_mount_point(Path::new(skyward_crypto::data::MOUNT));
+                // Keep an incomplete user inventory from starting an update.
                 if self.pending.take().is_some() {
                     let failed = skyward_install::Outcome::Failed(skyward_install::Failure::Unreadable(why.clone()));
                     self.app.install(skyward_install::Event::Finished(failed), now);
                     self.done_with_request()?;
                 }
-                self.app.data_failed(why);
+                match mounted {
+                    Ok(true) => show_incomplete(&mut self.app, why)?,
+                    status => {
+                        skyward_sys::kmsg(&format!("data opening failed (mount check: {status:?}): {why}"))?;
+                        self.app.data_failed(why);
+                    }
+                }
             }
             decrypt::Ended::Unlocked(Ok(still)) => {
                 self.closed = still;
@@ -2390,7 +2423,8 @@ impl Pages<'_> {
         }
         // Screenshots taken while internal storage was closed go into
         // the gallery's once it opens.
-        if self.app.state.place_open(Place::Storage)
+        if !matches!(self.app.state.data, Data::Incomplete { .. })
+            && self.app.state.place_open(Place::Storage)
             && let Err(e) = keep_held_screenshots()
         {
             let why = format!("{e:#}");
@@ -2402,6 +2436,12 @@ impl Pages<'_> {
         // its page says to.
         if let Some(wanted) = self.pending.take() {
             match wanted.needs {
+                Needs::User(user) if self.closed.iter().any(|c| c.user == user) && matches!(self.app.state.data, Data::Incomplete { .. }) => {
+                    // There is no credential prompt that can satisfy this request.
+                    let failed = skyward_install::Outcome::Failed(skyward_install::Failure::Unreadable(format!("user {user}'s files are not available")));
+                    self.app.install(skyward_install::Event::Finished(failed), now);
+                    self.done_with_request()?;
+                }
                 Needs::User(user) if self.closed.iter().any(|c| c.user == user) => {
                     self.app.asked_locked(user, now);
                     self.pending = Some(wanted);

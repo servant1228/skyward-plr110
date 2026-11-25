@@ -224,6 +224,9 @@ enum Cmd {
     },
 }
 
+#[cfg(target_os = "android")]
+mod port_diag;
+
 fn main() -> Result<()> {
     // init starts the recovery service by path with no arguments.
     let started_as = std::env::args_os().next().unwrap_or_default();
@@ -750,6 +753,8 @@ fn adopt_installed_version(props: &std::collections::HashMap<String, String>) ->
 /// once, so that any reboot from here boots the system. Failures go to the
 /// kernel log and still end the process, which init then starts again.
 fn recovery() -> Result<()> {
+    #[cfg(target_os = "android")]
+    port_diag::mark("enter recovery");
     use std::os::unix::fs::PermissionsExt;
     let run = || -> Result<()> {
         // Open to the programs the recovery runs as other users, the
@@ -825,8 +830,10 @@ fn recovery() -> Result<()> {
             // shared blocks, which writes to the slot's own.
             let mut programs = cfg.services.clone();
             if !matches!(request.work, bcb::Work::Fastboot | bcb::Work::WipeAb { .. } | bcb::Work::UnshareBlocks) {
+                port_diag::mark("prepare slot and services");
                 programs.extend(prepare(&cfg, booted_slot()?)?);
             }
+            port_diag::mark("enter UI");
             let root = Path::new("/");
             ui::run(&cfg, &programs, &root.join(ramdisk::FONT), &root.join(ramdisk::MONO), request, Screen::Home, None)
         }
@@ -836,6 +843,8 @@ fn recovery() -> Result<()> {
         }
     };
     run().inspect_err(|e| {
+        #[cfg(target_os = "android")]
+        port_diag::mark(&format!("startup error: {e:#}"));
         let _ = skyward_sys::kmsg(&format!("recovery failed: {e:#}"));
     })
 }

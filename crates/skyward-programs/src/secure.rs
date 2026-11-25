@@ -65,9 +65,12 @@ const NXP_CONTROLLER: Driver = Driver { module: "nxp-nci", node: "/dev/nq-nci" }
 /// recovery has to load one: Thales' and NXP's go through Android's secure
 /// element service, and Goodix's, whose program is named after no maker,
 /// through Goodix's own.
-const WEAVERS: [(&str, Through, Option<Driver>); 3] = [
+const WEAVERS: [(&str, Through, Option<Driver>); 4] = [
     (".thales", Through::ElementService, None),
     (".nxp-qti", Through::ElementService, Some(NXP_CONTROLLER)),
+    // OPlus SN220T: the Weaver transport opens the OMAPI default service;
+    // the board's qcom,sn-nci controller binds to the same NXP driver.
+    (".weaver-service.nxp", Through::ElementService, Some(NXP_CONTROLLER)),
     ("weaver-service", Through::Own("vendor.goodix.hardware.secure_element_aidl.IGdxEse"), None),
 ];
 

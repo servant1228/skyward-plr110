@@ -175,6 +175,8 @@ failed = "Error al fusionar"
 merged = "Fusionada"
 
 [data]
+mounted_owner = "/data montada · Almacenamiento del propietario disponible"
+mounted_unconfirmed = "/data montada · Acceso del propietario sin confirmar"
 not_mounted = "No montada"
 locked = "Bloqueada"
 decrypted = "Descifrada"

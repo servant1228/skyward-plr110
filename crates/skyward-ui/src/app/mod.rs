@@ -35,6 +35,7 @@ use skyward_vab::{BootSlots, Hold, Slot, SnapshotState, Standing};
 
 mod act;
 mod backup;
+mod data_state;
 mod decrypt;
 mod draw;
 mod entry;
@@ -62,6 +63,7 @@ mod wipe;
 mod wlan;
 
 pub use backup::*;
+pub use data_state::{Data, Keys};
 pub use decrypt::*;
 pub use entry::*;
 pub use filesystem::*;

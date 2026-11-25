@@ -4,6 +4,8 @@
 
 [English](README.md) | 简体中文
 
+设备移植：[OnePlus ACE 6T 适配状态与构建说明](port/OP6117L1/README.md)。
+
 Skyward 是使用 Rust 编写的 recovery，从零开始编写。
 
 <p align="center">

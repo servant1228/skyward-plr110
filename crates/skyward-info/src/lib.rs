@@ -157,9 +157,7 @@ pub fn collect_with(cfg: &DeviceConfig, battery: Option<Battery>) -> Result<Devi
     };
     let system = SystemProps::current()?;
     Ok(DeviceInfo {
-        // The system names the exact edition; the configured model covers a
-        // system whose partitions are not mounted.
-        model: system.get("ro.product.marketname").unwrap_or_else(|| cfg.device.model.clone()),
+        model: if cfg.device.use_market_name { system.get("ro.product.marketname") } else { None }.unwrap_or_else(|| cfg.device.model.clone()),
         codename: cfg.device.codename.clone(),
         soc: cfg.device.soc.clone(),
         cpu: cpu(Path::new(CPU))?,

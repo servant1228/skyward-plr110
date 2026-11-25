@@ -213,6 +213,8 @@ merged = "Merged"
 
 # Where the data partition stands.
 [data]
+mounted_owner = "/data mounted · Owner storage available"
+mounted_unconfirmed = "/data mounted · Owner storage unconfirmed"
 not_mounted = "Not mounted"
 locked = "Locked"
 decrypted = "Decrypted"

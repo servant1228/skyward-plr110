@@ -50,10 +50,20 @@ pub fn check(device: &Path, filesystem: &str) -> Result<Checked> {
     match filesystem {
         "f2fs" => {
             let ran = tools::find(FSCK_F2FS)?.run(&arguments(&CHECK_F2FS, device)?)?;
-            Ok(Checked { status: ran.status, said: ran.said })
+            before_writable_mount(device, ran)
         }
         other => bail!("{} holds {other}, which the recovery does not check before writing to it", device.display()),
     }
+}
+
+/// A writable mount is only attempted after a clean exit. Do not assume
+/// that a nonzero vendor checker status means it is safe to continue, or
+/// automatically retry a check that may already have written repairs.
+fn before_writable_mount(device: &Path, ran: Ran) -> Result<Checked> {
+    if ran.status != CLEAN {
+        bail!("{FSCK_F2FS} exited with {} checking {}; writable mount not attempted", ran.status, device.display());
+    }
+    Ok(Checked { status: ran.status, said: ran.said })
 }
 
 /// How a repair left the filesystem.
@@ -128,6 +138,17 @@ mod tests {
     fn a_filesystem_the_recovery_does_not_check_or_repair_is_refused() {
         assert!(check(Path::new("/dev/x"), "ext4").is_err(), "only f2fs is checked before mounting");
         assert!(repair(Path::new("/dev/x"), "erofs").is_err());
+    }
+
+    #[test]
+    fn only_a_clean_premount_check_allows_a_writable_mount() {
+        let device = Path::new("/dev/test");
+        let ran = |status| Ran { status, said: "report".into() };
+        assert_eq!(before_writable_mount(device, ran(0)).unwrap().said, "report");
+        for status in [1, 2, 4, 8, 126, 255] {
+            let error = before_writable_mount(device, ran(status)).unwrap_err().to_string();
+            assert!(error.contains(&format!("exited with {status} checking /dev/test")));
+        }
     }
 
     #[test]

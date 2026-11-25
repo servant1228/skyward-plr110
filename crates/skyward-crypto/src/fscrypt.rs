@@ -44,6 +44,13 @@ pub fn add_key(mount: &Path, raw: &[u8], wrapped: bool) -> Result<[u8; NAME_BYTE
 /// own files read only once that user's key is let in.
 #[cfg(target_os = "android")]
 pub fn unlocked(dir: &Path) -> Result<bool> {
+    Ok(directory_key_present(dir)?.unwrap_or(true))
+}
+
+/// Read the directory policy and ask the kernel about its key, without
+/// listing the directory. No policy is not evidence of a present CE key.
+#[cfg(target_os = "android")]
+pub fn directory_key_present(dir: &Path) -> Result<Option<bool>> {
     use std::os::fd::AsRawFd;
     const GET_POLICY: u32 = 0xc009_6616;
     const GET_KEY_STATUS: u32 = 0xc080_661a;
@@ -64,7 +71,7 @@ pub fn unlocked(dir: &Path) -> Result<bool> {
         // the means to encrypt any, as one that holds a partition the
         // phone keeps plain may be.
         if matches!(e.raw_os_error(), Some(libc::ENODATA | libc::EOPNOTSUPP)) {
-            return Ok(true);
+            return Ok(None);
         }
         return Err(e).with_context(|| format!("read how {} is encrypted", dir.display()));
     }
@@ -83,7 +90,7 @@ pub fn unlocked(dir: &Path) -> Result<bool> {
     if unsafe { libc::ioctl(folder.as_raw_fd(), GET_KEY_STATUS as libc::Ioctl, status.as_mut_ptr()) } != 0 {
         return Err(std::io::Error::last_os_error()).with_context(|| format!("ask whether the key for {} is in", dir.display()));
     }
-    Ok(u32::from_ne_bytes(status[64..68].try_into().expect("four bytes")) == PRESENT)
+    Ok(Some(u32::from_ne_bytes(status[64..68].try_into().expect("four bytes")) == PRESENT))
 }
 
 /// Whether what a phone says about how it encrypts its files means the

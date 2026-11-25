@@ -29,7 +29,7 @@ const TICKS_REST: Duration = Duration::from_millis(40);
 /// playing after its samples have run out, even when told to stop, until
 /// the click is taken away. So each click is loaded as it is played, at the
 /// strength the slider gives, and taken away once it has played out.
-pub struct Haptics {
+struct ForceMotor {
     dev: File,
     click: Click,
     ticks: Click,
@@ -52,11 +52,11 @@ enum Click {
     Samples { data: Vec<i8>, rate: u32 },
 }
 
-impl Haptics {
+impl ForceMotor {
     /// The force-feedback device and the configured click. Loading a click
     /// fills the driver's queue with what it plays, so the click is loaded
     /// only as it is played.
-    pub fn open(cfg: &skyward_config::Haptics) -> Result<Haptics> {
+    fn open(cfg: &skyward_config::ForceFeedback) -> Result<Self> {
         let (path, dev) = motor()?;
         let hz = resonance(&cfg.resonance)?;
         let click = match cfg.click {
@@ -70,7 +70,7 @@ impl Haptics {
             }
         };
         let ticks = Click::Samples { data: ticks(hz), rate: TICKS_RATE };
-        Ok(Haptics { dev, click, ticks, strength: cfg.strength, scale_samples: cfg.scale_samples, playing: Arc::new(Mutex::new(None)), clicks: 0 })
+        Ok(Self { dev, click, ticks, strength: cfg.strength, scale_samples: cfg.scale_samples, playing: Arc::new(Mutex::new(None)), clicks: 0 })
     }
 
     /// One short click at the strength the slider's `position` gives, after
@@ -118,20 +118,56 @@ impl Haptics {
     }
 }
 
+pub(crate) struct Haptics(Backend);
+
+enum Backend {
+    Force(ForceMotor),
+    Timed(PathBuf),
+}
+
+impl Haptics {
+    pub fn open(cfg: &skyward_config::Haptics) -> Result<Self> {
+        Ok(Self(match cfg {
+            skyward_config::Haptics::Force(c) => Backend::Force(ForceMotor::open(c)?),
+            skyward_config::Haptics::Timed { timed_led } => Backend::Timed(PathBuf::from(timed_led)),
+        }))
+    }
+
+    pub fn click(&mut self, position: f32) -> Result<Duration> {
+        match &mut self.0 {
+            Backend::Force(f) => f.click(position),
+            // Vary pulse length, not the OEM gain, voltage or calibration.
+            Backend::Timed(dir) => pulse(dir, 12 + (20.0 * position.clamp(0.0, 1.0)).round() as u64),
+        }
+    }
+
+    pub fn ticks(&mut self) -> Result<Duration> {
+        match &mut self.0 {
+            Backend::Force(f) => f.ticks(),
+            Backend::Timed(dir) => pulse(dir, 24),
+        }
+    }
+}
+
+fn pulse(dir: &std::path::Path, ms: u64) -> Result<Duration> {
+    for (attr, value) in [("duration", ms.to_string()), ("activate", "1".into())] {
+        let path = dir.join(attr);
+        OpenOptions::new().write(true).open(&path).and_then(|mut f| f.write_all(value.as_bytes()))
+            .with_context(|| format!("write {value} to {}", path.display()))?;
+    }
+    Ok(Duration::from_millis(ms))
+}
+
 /// Play the configured click once at the slider's `position`, or else the
 /// ticks of the screen going off, saying how strongly and for how long, for
 /// trying out a motor.
 pub fn probe(cfg: &skyward_config::Haptics, position: f32, ticks: bool) -> Result<()> {
     let mut haptics = Haptics::open(cfg)?;
-    let (what, strength, length) = if ticks {
-        ("ticks", TICKS_STRENGTH, haptics.ticks()?)
-    } else {
-        ("click", share(&cfg.strength, position), haptics.click(position)?)
-    };
+    let (what, length) = if ticks { ("ticks", haptics.ticks()?) } else { ("click", haptics.click(position)?) };
     // Once it has played out, what played goes with the device as the
     // command ends.
     std::thread::sleep(length);
-    println!("played the {what} at {strength:.3} of the full strength, {} ms long", length.as_millis());
+    println!("requested {what}, {} ms long", length.as_millis());
     Ok(())
 }
 

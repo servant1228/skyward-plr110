@@ -1,0 +1,12 @@
+[workspace]
+
+[package]
+name = "replay-plr110-plan"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+anyhow = "1"
+roxmltree = "0.21.2"
+skyward-config = { path = "../../../crates/skyward-config" }

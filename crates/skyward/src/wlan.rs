@@ -505,7 +505,8 @@ impl Station {
     /// Look how far the network joined reaches, on a thread of its own, the
     /// page's name looked up in the network's own DNS servers, `dns`.
     fn probe(&mut self, dns: Vec<Ipv4Addr>) {
-        let (page, back) = (self.cfg.probe.clone(), self.back.clone());
+        let Some(page) = self.cfg.probe.clone() else { return };
+        let back = self.back.clone();
         let Some(r) = &mut self.running else { return };
         r.probed += 1;
         let n = r.probed;
@@ -625,6 +626,11 @@ impl Station {
 fn bring_up(cfg: &Config, modules: &[PathBuf]) -> Result<()> {
     let net = Path::new("/sys/class/net").join(&cfg.interface);
     if !net.exists() {
+        if let Some(partition) = &cfg.firmware_partition {
+            let entry = skyward_block::fstab::partition(partition)?.context("no WLAN firmware partition in fstab")?;
+            ensure!(entry.options.iter().any(|o| o == "ro") && !entry.options.iter().any(|o| o == "rw"), "{partition}: expected read-only firmware");
+            crate::mount_firmware(partition)?;
+        }
         for file in &cfg.firmware {
             place(file)?;
         }

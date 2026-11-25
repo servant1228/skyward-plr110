@@ -793,6 +793,7 @@ impl App {
                 Data::Open | Data::Locked { .. } => fx.push(Effect::Relabel),
                 Data::Opening => self.say(l.pick(DATA_OPENING), now),
                 Data::Erased => self.say(l.pick(DATA_ERASED), now),
+                Data::Incomplete { .. } => self.say(l.pick(DECRYPT_FIRST), now),
                 Data::Closed | Data::Failed(_) => self.say(l.pick(texts::toast::OPEN_DATA_FIRST), now),
             },
             // The data partition is reached through its own key whether or

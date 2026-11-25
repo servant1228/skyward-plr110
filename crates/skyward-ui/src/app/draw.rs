@@ -17,7 +17,7 @@ impl App {
             data: match self.state.data {
                 Data::Erased => None,
                 Data::Open => Some(true),
-                Data::Closed | Data::Opening | Data::Failed(_) | Data::Locked { .. } => Some(false),
+                Data::Closed | Data::Opening | Data::Failed(_) | Data::Incomplete { .. } | Data::Locked { .. } => Some(false),
             },
             slot: info.slot.map(Slot::letter),
             temp: battery.and_then(|b| b.temp),

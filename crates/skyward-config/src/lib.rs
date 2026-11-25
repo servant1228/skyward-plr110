@@ -128,7 +128,11 @@ pub struct Wlan {
     pub service: String,
     /// The page the stock system asks over plain HTTP to tell whether a
     /// network reaches the internet, which answers 204 with nothing.
-    pub probe: String,
+    #[serde(default)]
+    pub probe: Option<String>,
+    /// Slot-selected, read-only firmware partition, mounted only on WLAN demand.
+    #[serde(default)]
+    pub firmware_partition: Option<String>,
 }
 
 /// A value written to a file, such as a switch in sysfs.
@@ -213,7 +217,14 @@ const DATA: &str = "/data";
 /// motor's resonant frequency, which the driver plays as they are given,
 /// and the ticks of the screen going off by the power key, made too.
 #[derive(Debug, Clone, PartialEq, Deserialize)]
-pub struct Haptics {
+#[serde(untagged)]
+pub enum Haptics {
+    Timed { timed_led: String },
+    Force(ForceFeedback),
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+pub struct ForceFeedback {
     /// The driver's number for a click waveform it keeps, on phones whose
     /// driver plays the waveforms it keeps.
     #[serde(default)]
@@ -276,6 +287,9 @@ pub struct Device {
     pub brand: String,
     #[serde(default)]
     pub model: String,
+    /// Use the installed system's marketing name in preference to `model`.
+    #[serde(default = "default_true")]
+    pub use_market_name: bool,
     #[serde(default = "default_true")]
     pub ab: bool,
     /// SoC marketing name shown on the About page.
@@ -551,7 +565,11 @@ impl DeviceConfig {
             let plain = path.components().all(|c| matches!(c, std::path::Component::Normal(_)));
             ensure!(plain && !folder.is_empty(), "[backup] data_skipped: {folder} is not a path from the top of {DATA}");
         }
-        if let Some(haptics) = &cfg.haptics {
+        if let Some(Haptics::Timed { timed_led }) = &cfg.haptics {
+            let path = Path::new(timed_led);
+            ensure!(path.parent() == Some(Path::new("/sys/class/leds")) && path.file_name().is_some(), "[haptics] timed_led: not an LED class device");
+        }
+        if let Some(Haptics::Force(haptics)) = &cfg.haptics {
             let file = &haptics.resonance;
             ensure!(Path::new(file).is_absolute(), "[haptics] resonance: {file} is not an absolute path");
             let Strength { lightest, strongest } = haptics.strength;
@@ -594,7 +612,9 @@ impl DeviceConfig {
             );
         }
         if let Some(wlan) = &cfg.wlan {
-            ensure!(wlan.probe.starts_with("http://"), "[wlan] probe: {} is not a plain HTTP address", wlan.probe);
+            if let Some(probe) = &wlan.probe {
+                ensure!(probe.starts_with("http://"), "[wlan] probe: {probe} is not a plain HTTP address");
+            }
             for file in &wlan.firmware {
                 let name = Path::new(&file.name);
                 let plain = name.components().all(|c| matches!(c, std::path::Component::Normal(_)));
@@ -653,7 +673,7 @@ mod tests {
     #[test]
     fn ishtar_clicks_with_a_waveform_its_driver_keeps() {
         let cfg = DeviceConfig::parse(include_str!("../../../devices/ishtar.toml")).unwrap();
-        let haptics = cfg.haptics.expect("the 13 Ultra has a motor");
+        let Some(Haptics::Force(haptics)) = cfg.haptics else { panic!("the 13 Ultra has a force-feedback motor") };
         assert_eq!((haptics.click, haptics.resonance.as_str()), (Some(0), "/sys/class/qcom-haptics/lra_frequency_hz"));
         assert_eq!(haptics.strength, Strength { lightest: 0.5, strongest: 1.0 });
         assert!(!haptics.scale_samples, "its strength is the magnitude its driver is given");
@@ -662,7 +682,7 @@ mod tests {
     #[test]
     fn socrates_clicks_with_samples_made_as_strong_as_the_slider_says() {
         let cfg = DeviceConfig::parse(include_str!("../../../devices/socrates.toml")).unwrap();
-        let haptics = cfg.haptics.expect("the K60 Pro has a motor");
+        let Some(Haptics::Force(haptics)) = cfg.haptics else { panic!("the K60 Pro has a force-feedback motor") };
         assert_eq!((haptics.click, haptics.resonance.as_str()), (None, "/sys/class/qcom-haptics/lra_frequency_hz"));
         assert_eq!(haptics.strength, Strength { lightest: 0.15, strongest: 1.0 });
         assert!(haptics.scale_samples, "its driver plays samples at two strengths alone");
@@ -729,7 +749,7 @@ mod tests {
         assert!(post_boot.oneshot, "the system's own settings for after start are made once");
         assert_eq!(post_boot.args, ["/vendor/bin/init.kernel.post_boot.sh"]);
         assert_eq!(post_boot.libraries, ["/system/lib64", "/vendor/lib64"], "it loads the recovery's own libraries first");
-        let haptics = cfg.haptics.expect("the 17 Ultra has a motor");
+        let Some(Haptics::Force(haptics)) = cfg.haptics else { panic!("the 17 Ultra has a force-feedback motor") };
         assert_eq!((haptics.click, haptics.resonance.as_str()), (None, "/sys/class/qcom-haptics/lra_frequency_hz"), "its click is made");
         assert_eq!(haptics.strength, Strength { lightest: 0.25, strongest: 0.75 }, "past three quarters the motor rattles");
         assert_eq!(cfg.backup.efs, ["modemst1", "modemst2", "fsg", "fsc", "persist"]);
@@ -922,7 +942,7 @@ mod tests {
         assert_eq!(wlan.firmware[1].path, "kiwi_v2/wlan_mac.bin");
         assert_eq!(wlan.interface, "wlan0");
         assert_eq!(wlan.service, "android.hardware.wifi.supplicant.ISupplicant/default");
-        assert_eq!(wlan.probe, "http://connect.rom.miui.com/generate_204");
+        assert_eq!(wlan.probe.as_deref(), Some("http://connect.rom.miui.com/generate_204"));
         assert_eq!(cfg.update.expect("its update server is known").server, "https://update.miui.com/updates/miotaV3.php");
     }
 
@@ -935,8 +955,28 @@ mod tests {
         assert_eq!(wlan.writes, [Write { path: "/sys/kernel/cnss/fs_ready".into(), value: "1".into() }]);
         assert!(wlan.firmware.is_empty(), "the vendor's own links reach its settings and persist's MAC address");
         assert_eq!(wlan.libraries, ["/system/lib64", "/vendor/lib64"], "the recovery's own libraries come first");
-        assert_eq!(wlan.probe, "http://connect.rom.miui.com/generate_204", "as the stock system asks it");
+        assert_eq!(wlan.probe.as_deref(), Some("http://connect.rom.miui.com/generate_204"), "as the stock system asks it");
         assert_eq!(cfg.update.expect("its update server is known").server, "https://update.miui.com/updates/miotaV3.php");
+    }
+
+    #[test]
+    fn plr110_keeps_the_configured_display_name() {
+        let device = DeviceConfig::parse(include_str!("../../../devices/OP6117L1.toml")).unwrap().device;
+        assert_eq!(device.model, "OnePlus ACE 6T");
+        assert!(!device.use_market_name);
+        assert!(DeviceConfig::parse("[device]\ncodename = 'other'").unwrap().device.use_market_name);
+    }
+
+    #[test]
+    fn plr110_uses_timed_haptics_and_on_demand_wpss() {
+        let cfg = DeviceConfig::parse(include_str!("../../../devices/OP6117L1.toml")).unwrap();
+        assert!(matches!(cfg.haptics, Some(Haptics::Timed { timed_led }) if timed_led == "/sys/class/leds/vibrator"));
+        assert_eq!(cfg.modules.load, ["oplus_hbp_core"]);
+        let wlan = cfg.wlan.unwrap();
+        assert_eq!(wlan.modules, ["rfkill", "qca_cld3_wcn7750"]);
+        assert_eq!(wlan.firmware_partition.as_deref(), Some("modem"));
+        assert_eq!(wlan.writes.last().unwrap().path, "/sys/kernel/icnss/wpss_boot");
+        assert!(wlan.probe.is_none());
     }
 
     #[test]
@@ -944,7 +984,7 @@ mod tests {
         let base = "[device]\ncodename = \"x\"\n[wlan]\nmodules = []\ninterface = \"wlan0\"\nsupplicant = \"/s\"\nservice = \"a/b\"\n";
         assert!(DeviceConfig::parse(&format!("{base}probe = \"http://connect.rom.miui.com/generate_204\"\n")).is_ok());
         assert!(DeviceConfig::parse(&format!("{base}probe = \"https://connect.rom.miui.com/generate_204\"\n")).is_err(), "a login cannot answer in its stead");
-        assert!(DeviceConfig::parse(base).is_err(), "a WLAN says how it is probed");
+        assert!(DeviceConfig::parse(base).unwrap().wlan.unwrap().probe.is_none(), "no HTTP request without a configured endpoint");
     }
 
     #[test]

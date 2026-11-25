@@ -175,6 +175,8 @@ failed = "Gagal digabungkan"
 merged = "Digabungkan"
 
 [data]
+mounted_owner = "/data terpasang · Penyimpanan pemilik tersedia"
+mounted_unconfirmed = "/data terpasang · Akses penyimpanan pemilik belum terkonfirmasi"
 not_mounted = "Tidak di-mount"
 locked = "Terkunci"
 decrypted = "Terdekripsi"

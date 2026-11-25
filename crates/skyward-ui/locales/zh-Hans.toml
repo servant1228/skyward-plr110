@@ -175,6 +175,8 @@ failed = "合并失败"
 merged = "已合并"
 
 [data]
+mounted_owner = "/data 已挂载 · 机主内部存储可用"
+mounted_unconfirmed = "/data 已挂载 · 机主内部存储尚未确认可用"
 not_mounted = "未挂载"
 locked = "未解密"
 decrypted = "已解密"

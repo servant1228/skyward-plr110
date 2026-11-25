@@ -175,6 +175,8 @@ failed = "Merge fehlgeschlagen"
 merged = "Gemergt"
 
 [data]
+mounted_owner = "/data eingehängt · Eigentümerspeicher verfügbar"
+mounted_unconfirmed = "/data eingehängt · Zugriff auf Eigentümerspeicher unbestätigt"
 not_mounted = "Nicht eingehängt"
 locked = "Gesperrt"
 decrypted = "Entschlüsselt"

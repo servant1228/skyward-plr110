@@ -204,7 +204,7 @@ pub fn home(cx: &Ctx) -> Frame {
     out.push(Hit { rect: bar, action: Action::Open(Screen::Search) });
 
     let sub = match &i.os_version {
-        Some(v) => format!("{} · {v}", i.codename),
+        Some(v) => format!("{} · {}", i.codename, fmt::os_version(v)),
         None => i.codename.clone(),
     };
     // Under the phone's name the card holds only what asks for something to
@@ -509,7 +509,7 @@ fn about_cards(cx: &Ctx, c: &mut Canvas) -> (Vec<Hit>, f32, f32) {
         Fact { title: l.pick(texts::specs::STORAGE), value: storage, link: true },
     ];
     if let Some(v) = &i.os_version {
-        facts.push(Fact { title: l.pick(texts::specs::OS_VERSION), value: v.clone(), link: false });
+        facts.push(Fact { title: l.pick(texts::specs::OS_VERSION), value: fmt::os_version(v).into(), link: false });
     }
     if let Some(r) = &i.android {
         facts.push(Fact { title: l.pick(texts::specs::ANDROID_VERSION), value: r.clone(), link: false });
@@ -564,7 +564,7 @@ pub fn specs(cx: &Ctx) -> Frame {
     let mut y = widgets::spec_grid(&mut c, t, f, top, &grid);
 
     if let Some(v) = &i.os_version {
-        y = widgets::info_card(&mut c, t, f, y + gap, &[(l.pick(texts::specs::OS_VERSION), v.clone())]);
+        y = widgets::info_card(&mut c, t, f, y + gap, &[(l.pick(texts::specs::OS_VERSION), fmt::os_version(v).into())]);
     }
     if let Some(r) = &i.android {
         y = widgets::info_card(&mut c, t, f, y + gap, &[(l.pick(texts::specs::ANDROID_VERSION), fmt::android(l, r, i.security_patch.as_ref()))]);
@@ -637,6 +637,9 @@ pub fn decrypt(cx: &Ctx) -> Frame {
             None,
         ),
         Data::Open => data_status(cx, c, Icon::Folder, l.pick(texts::decrypt::DECRYPTED), Some(l.pick(texts::decrypt::SEE_FILES)), None),
+        Data::Incomplete { owner_storage, why } => data_status(
+            cx, c, if *owner_storage { Icon::Folder } else { Icon::Lock }, fmt::data(l, &cx.state.data), None, Some(why),
+        ),
         Data::Failed(why) => data_status(cx, c, Icon::Lock, l.pick(texts::decrypt::FAILED), None, Some(why)),
         Data::Erased => data_status(cx, c, Icon::Wipe, l.pick(texts::data::ERASED), Some(l.pick(texts::decrypt::MADE_ANEW)), None),
     }
@@ -779,7 +782,7 @@ pub fn install(cx: &Ctx) -> Frame {
     let top = t.m.content_top;
     let mut facts = Vec::new();
     if let Some(v) = &i.os_version {
-        facts.push((l.pick(texts::install::CURRENT_SYSTEM), v.clone()));
+        facts.push((l.pick(texts::install::CURRENT_SYSTEM), fmt::os_version(v).into()));
     }
     if let Some(p) = &i.security_patch {
         facts.push((l.pick(texts::install::SECURITY_PATCH), fmt::patch(l, p)));
@@ -1923,6 +1926,7 @@ pub fn relabel(cx: &Ctx) -> Frame {
         let note = match s.data {
             Data::Open | Data::Locked { .. } => None,
             Data::Erased => Some(texts::relabel::DATA_ERASED),
+            Data::Incomplete { .. } => Some(texts::toast::DECRYPT_FIRST),
             Data::Closed | Data::Opening | Data::Failed(_) => Some(texts::relabel::OPEN_FIRST),
         };
         if let Some(note) = note {
@@ -2210,7 +2214,7 @@ pub fn update(cx: &Ctx) -> Frame {
     let mut y = top;
     if let Some(v) = &i.os_version {
         y = widgets::section_first(&mut c, t, f, y, l.pick(texts::common::THIS_PHONE));
-        y = widgets::info_card(&mut c, t, f, y, &[(l.pick(texts::update::CURRENT_VERSION), v.clone())]);
+        y = widgets::info_card(&mut c, t, f, y, &[(l.pick(texts::update::CURRENT_VERSION), fmt::os_version(v).into())]);
     }
     if s.update_server {
         let online_update = l.pick(texts::update::ONLINE);
@@ -3210,11 +3214,11 @@ pub fn systems(cx: &Ctx) -> Frame {
     let main = SystemCard {
         role: l.pick(texts::systems::MAIN),
         name: &systems.installed.name,
-        detail: systems.installed.version.as_deref().unwrap_or_default(),
+        detail: fmt::os_version(systems.installed.version.as_deref().unwrap_or_default()),
         mark: SystemMark::Check(chosen == Who::Installed && systems.held != Held::Unrecorded),
     };
     let second = match &systems.other {
-        Some(other) => SystemCard { role: second_role, name: &other.name, detail: &other.version, mark: SystemMark::Check(chosen == Who::Other) },
+        Some(other) => SystemCard { role: second_role, name: &other.name, detail: fmt::os_version(&other.version), mark: SystemMark::Check(chosen == Who::Other) },
         None => SystemCard {
             role: second_role,
             name: l.pick(texts::systems::INSTALL),

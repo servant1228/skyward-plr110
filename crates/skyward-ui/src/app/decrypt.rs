@@ -14,48 +14,6 @@ pub const DATA_ERASED: Text = texts::data::ERASED;
 /// decrypted.
 pub const DECRYPT_FIRST: Text = texts::toast::DECRYPT_FIRST;
 
-/// Which control answers a user's screen lock, by the kind of lock it is.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Keys {
-    Pattern,
-    Digits,
-    Letters,
-}
-
-/// Where the data partition stands.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub enum Data {
-    /// Not opened; the decrypt page opens it as it shows.
-    #[default]
-    Closed,
-    /// Being opened as far as it opens with nothing a user knows, which is
-    /// also when each user's screen lock is read.
-    Opening,
-    /// Open, with this user's own files waiting on their screen lock,
-    /// answered with `keys`; `checking` while what they entered is checked.
-    Locked { user: u32, keys: Keys, checking: bool },
-    /// Open, every user's own files with it.
-    Open,
-    /// Not opened, and why.
-    Failed(String),
-    /// Erased whole: nothing opens until the system makes it afresh, as it
-    /// next starts.
-    Erased,
-}
-
-impl Data {
-    /// Whether the owner's internal storage can be read: the partition is
-    /// open, and so are the owner's own files, which open first.
-    pub fn storage_open(&self) -> bool {
-        match self {
-            Data::Open => true,
-            // The owner is user 0.
-            Data::Locked { user, .. } => *user != 0,
-            _ => false,
-        }
-    }
-}
-
 impl App {
     /// The data partition is open: every user's own files with it, or
     /// those of `waiting`, the user and the control their screen lock is
@@ -65,6 +23,12 @@ impl App {
             Some((user, keys)) => Data::Locked { user, keys, checking: false },
             None => Data::Open,
         };
+        self.state.code.clear();
+        self.refresh();
+    }
+
+    pub fn data_incomplete(&mut self, owner_storage: bool, why: String) {
+        self.state.data = Data::Incomplete { owner_storage, why };
         self.state.code.clear();
         self.refresh();
     }
@@ -248,6 +212,20 @@ mod tests {
         let fx = app.touch(Touch::Up, &f, 0);
         assert!(fx.is_empty());
         assert_eq!(app.deadline(0), Some(TOAST_MS), "the page says how many dots it takes");
+    }
+
+    #[test]
+    fn a_mounted_partition_with_a_user_service_error_is_not_opened_again_on_entry() {
+        let (f, i) = (fonts(), info());
+        let mut app = App::new(Screen::Home, W, H, PPD);
+        for confirmed in [false, true] {
+            app.data_incomplete(confirmed, "user 10: Failed to retrieve slots info".into());
+            assert!(tap(&mut app, &f, &i, Action::Open(Screen::Decrypt)).is_empty());
+            assert!(!keys_shown(&mut app, &f, &i));
+            assert_eq!(app.state.place_open(Place::Storage), confirmed);
+            assert_ne!(app.state.data, Data::Open);
+            tap(&mut app, &f, &i, Action::Skip);
+        }
     }
 
     #[test]

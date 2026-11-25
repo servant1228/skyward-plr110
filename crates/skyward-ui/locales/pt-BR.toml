@@ -175,6 +175,8 @@ failed = "Falha na mesclagem"
 merged = "Mesclada"
 
 [data]
+mounted_owner = "/data montada · Armazenamento do proprietário disponível"
+mounted_unconfirmed = "/data montada · Acesso do proprietário não confirmado"
 not_mounted = "Não montada"
 locked = "Bloqueada"
 decrypted = "Descriptografada"

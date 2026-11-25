@@ -175,6 +175,8 @@ failed = "Hợp nhất thất bại"
 merged = "Đã hợp nhất"
 
 [data]
+mounted_owner = "Đã gắn /data · Có thể truy cập bộ nhớ của chủ sở hữu"
+mounted_unconfirmed = "Đã gắn /data · Chưa xác nhận quyền truy cập bộ nhớ của chủ sở hữu"
 not_mounted = "Chưa gắn kết"
 locked = "Chưa giải mã"
 decrypted = "Đã giải mã"

@@ -175,6 +175,8 @@ failed = "Birleştirilemedi"
 merged = "Birleştirildi"
 
 [data]
+mounted_owner = "/data bağlı · Cihaz sahibinin depolama alanı kullanılabilir"
+mounted_unconfirmed = "/data bağlı · Cihaz sahibinin depolama erişimi doğrulanmadı"
 not_mounted = "Bağlı değil"
 locked = "Kilitli"
 decrypted = "Şifresi çözüldü"

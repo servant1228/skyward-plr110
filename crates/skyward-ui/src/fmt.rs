@@ -18,6 +18,9 @@ use skyward_net::wlan::{Bands, Joined, Power, Stage as WlanStage, Wlan};
 use skyward_vab::{Hold, Slot, SnapshotState, Standing};
 use std::sync::OnceLock;
 
+mod version;
+pub use version::os_version;
+
 const GIB: f64 = 1024.0 * 1024.0 * 1024.0;
 
 /// Marketed RAM size: the smallest standard module size that holds `MemTotal`.
@@ -348,6 +351,8 @@ pub fn data(l: Lang, d: &Data) -> &'static str {
     l.pick(match d {
         Data::Closed | Data::Opening | Data::Failed(_) => texts::data::NOT_MOUNTED,
         Data::Locked { .. } => texts::data::LOCKED,
+        Data::Incomplete { owner_storage: true, .. } => texts::data::MOUNTED_OWNER,
+        Data::Incomplete { owner_storage: false, .. } => texts::data::MOUNTED_UNCONFIRMED,
         Data::Open => texts::data::DECRYPTED,
         Data::Erased => texts::data::WIPED,
     })

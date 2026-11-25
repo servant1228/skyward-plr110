@@ -1,0 +1,43 @@
+# OnePlus Ace 6T PLR110, PLR110_17.0.0.101(CN01). Experimental.
+# Source: Android properties, wm size/density and SPI binding on this unit.
+[device]
+codename = "OP6117L1"
+brand = "OnePlus"
+model = "OnePlus ACE 6T"
+use_market_name = false
+ab = true
+soc = { hans = "高通 SM8845", hant = "高通 SM8845", en = "Qualcomm SM8845" }
+os_version_prop = "ro.build.display.id"
+
+[display]
+width = 1272
+height = 2800
+density = 560
+
+[modules]
+sources = ["vendor_boot", "vendor_dlkm", "vendor", "system_dlkm"]
+# The SPI bus is bound to hbp_spi_bus; Android's input5 is virtual.
+# This is not proof of working recovery touch. Keep OEM recovery input init.
+load = ["oplus_hbp_core"]
+
+# AW8692x at I2C 16-005a; RAM waveform loaded by the OEM kernel driver.
+[haptics]
+timed_led = "/sys/class/leds/vibrator"
+
+# On-demand only. ueventd already searches /mnt/vendor/persist/ (including
+# wlan/WCNSS_qcom_cfg.ini), /odm/etc/wifi/ (wcn7750 board/regdb) and
+# /firmware/image/. Never run init.oplus.wifi.sh or copy into persist.
+[wlan]
+firmware_partition = "modem"
+modules = ["rfkill", "qca_cld3_wcn7750"]
+writes = [
+    { path = "/sys/kernel/icnss/wlan_en_delay", value = "1000" },
+    { path = "/sys/kernel/icnss/wpss_boot", value = "1" },
+]
+interface = "wlan0"
+supplicant = "/vendor/bin/hw/wpa_supplicant"
+libraries = ["/system/lib64", "/vendor/lib64"]
+service = "android.hardware.wifi.supplicant.ISupplicant/default"
+# No external connectivity probe until the stock endpoint is identified.
+
+# [stock] intentionally absent: build against the hash-checked local image.
